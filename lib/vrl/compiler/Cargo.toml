@@ -18,8 +18,10 @@ bitflags = "1"
 bytes = "1.1.0"
 chrono = "0.4"
 dyn-clone = "1.0.5"
-inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm13-0"], optional = true }
+inkwell = { git = "https://github.com/pablosichert/inkwell", branch = "orc2", features = ["llvm13-0"], optional = true }
 lalrpop-util = "0.19"
+libc = "0.2"
+llvm-sys = { version = "130", optional = true }
 ordered-float = "2"
 paste = "1"
 regex = "1"
@@ -40,5 +42,5 @@ harness = false
 
 [features]
 default = ["llvm"]
-llvm = ["precompiled", "inkwell"]
+llvm = ["precompiled", "inkwell", "llvm-sys"]
 test = []
