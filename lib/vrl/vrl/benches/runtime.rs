@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use compiler::{state, Resolved};
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
@@ -26,36 +26,9 @@ extern "C" {
     fn vrl_fn_upcase(value: *mut Resolved, resolved: *mut Resolved);
 }
 
-static SOURCES: [Source; 10] = [
-    // Source {
-    //     name: "10",
-    //     code: indoc! {r#"
-    //         .foo = {
-    //             "a": 123,
-    //             "b": 456,
-    //         }
-    //     "#},
-    // },
-    // Source {
-    //     name: "9",
-    //     code: indoc! {r#"
-    //         upcase("hi")
-    //     "#},
-    // },
+static SOURCES: [Source; 13] = [
     Source {
-        name: "8",
-        code: indoc! {r#"
-            123
-        "#},
-    },
-    Source {
-        name: "7",
-        code: indoc! {r#"
-            uuid_v4()
-        "#},
-    },
-    Source {
-        name: "6",
+        name: "simple",
         code: indoc! {r#"
             .hostname = "vector"
 
@@ -69,31 +42,66 @@ static SOURCES: [Source; 10] = [
         "#},
     },
     Source {
-        name: "5",
+        name: "11",
+        code: indoc! {r#"
+            .hostname = "vector"
+
+            if .status == "warning" {
+                .thing = upcase(.hostname)
+            } else if .status == "notice" {
+                .thung = downcase(.hostname)
+            } else {
+                .nong = upcase(.hostname)
+            }
+        "#},
+    },
+    Source {
+        name: "10",
+        code: indoc! {r#"
+            .foo = {
+                "a": 123,
+                "b": 456,
+            }
+        "#},
+    },
+    Source {
+        name: "9",
+        code: indoc! {r#"
+            upcase("hi")
+        "#},
+    },
+    Source {
+        name: "8",
+        code: indoc! {r#"
+            123
+        "#},
+    },
+    Source {
+        name: "7",
         code: indoc! {r#"
             .foo == "hi"
         "#},
     },
     Source {
-        name: "4",
+        name: "6",
         code: indoc! {r#"
             derp = "hi!"
         "#},
     },
     Source {
-        name: "3",
+        name: "5",
         code: indoc! {r#"
             .derp = "hi!"
         "#},
     },
     Source {
-        name: "2",
+        name: "4",
         code: indoc! {r#"
             .derp
         "#},
     },
     Source {
-        name: "1",
+        name: "3",
         code: indoc! {r#"
             .
         "#},
@@ -103,6 +111,12 @@ static SOURCES: [Source; 10] = [
         code: indoc! {r#"
             x = parse_json!(s'{"noog": "nork"}')
             x.noog
+        "#},
+    },
+    Source {
+        name: "0",
+        code: indoc! {r#"
+            uuid_v4()
         "#},
     },
     Source {
@@ -205,8 +219,11 @@ fn benchmark_kind_display(c: &mut Criterion) {
             .unwrap();
         let builder = vrl::llvm::Compiler::new().unwrap();
         println!("bench 1");
+        let mut symbols = HashMap::new();
+        symbols.insert("vrl_fn_upcase", upcase as usize);
+        symbols.insert("vrl_fn_downcase", downcase as usize);
         let library = builder
-            .compile((&local_env, &external_env), &program)
+            .compile((&local_env, &external_env), &program, symbols)
             .unwrap();
         println!("bench 2");
         let execute = library.get_function().unwrap();
