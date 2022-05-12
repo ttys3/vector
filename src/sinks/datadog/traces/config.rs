@@ -91,14 +91,12 @@ impl GenerateConfig for DatadogTracesConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DatadogTracesEndpoint {
     Traces,
-    #[allow(dead_code)] // This will be used when APM stats will be generated
     APMStats,
 }
 
 /// Store traces & APM stats endpoints actual URIs.
 pub struct DatadogTracesEndpointConfiguration {
     traces_endpoint: Uri,
-    // Unused so far
     stats_endpoint: Uri,
 }
 
