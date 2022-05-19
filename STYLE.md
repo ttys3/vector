@@ -140,8 +140,8 @@ emitting counters, gauges, and histograms.
 
 There are three basic metric types: counters, gauges, and histograms. **Counters** are meant for counting things, such
 as the total number of requests processed. Additionally, counters are monotonic, which means they can only be
-incremented (but not decremented) or reset to zero. **Gauges** are for tracking a single value
-that changes over time, such as the number of current connections. **Histograms** are for tracking multiple observations
+incremented (but not decremented) or reset to zero. **Gauges** are for tracking the current value
+of some variable, such as the number of active connections. **Histograms** are for tracking multiple observations
 of the same logical event, such as the time it takes to serve a request.
 
 Emitting metrics always involves a metric name and a value being measured. They can optionally accept descriptive
