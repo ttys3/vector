@@ -5,7 +5,7 @@ meant to be the canonical reference for all things style: code comments, formatt
 crates, data structures, or algorithms, and so on.
 
 In essence, we hope to turn pull request review comments like "why did you do it this way?" or "I think you could try
-doing it this way" into "we always do X this way: <link to style guide>".
+doing it this way" into "we prefer to see X this way: <link to style guide>".
 
 # Formatting
 
