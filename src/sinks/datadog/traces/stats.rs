@@ -1,5 +1,8 @@
 use std::{collections::BTreeMap, time};
 
+use chrono::Utc;
+use prost::Message;
+
 use crate::{
     event::{TraceEvent, Value},
     metrics::AgentDDSketch,
@@ -27,7 +30,6 @@ struct AggregationKey {
 impl AggregationKey {
     fn new_aggregation_from_span(
         span: &BTreeMap<String, Value>,
-        origin: String,
         payload_key: PayloadAggregationKey,
     ) -> Self {
         AggregationKey {
@@ -104,17 +106,28 @@ impl GroupedStats {
             hits: self.hits.round() as u64,
             errors: self.errors.round() as u64,
             duration: self.duration.round() as u64,
-            ok_summary: vec![],    // TODO !!! convert
-            error_summary: vec![], // TODO !!! convert
+            ok_summary: encode_sketch(&self.ok_distribution),
+            error_summary: encode_sketch(&self.ok_distribution),
             synthetics: false,
             top_level_hits: self.top_level_hits.round() as u64,
         }
     }
 }
 
+/// Convert agent sketch variant to ./proto/dd_sketch_full.proto
+/// see this for conversion https://github.com/DataDog/datadog-agent/pull/11146
+fn encode_sketch(_agent_sketch: &AgentDDSketch) -> Vec<u8> {
+    let s = ddsketch_full::DdSketch {
+        mapping: None,
+        positive_values: None,
+        negative_values: None,
+        zero_count: 0.0,
+    };
+    s.encode_to_vec()
+}
 struct Bucket {
-    start: u64,    // timestamp of start in our format
-    duration: u64, // duration of a bucket in nanoseconds
+    start: u64,
+    duration: u64,
     data: BTreeMap<AggregationKey, GroupedStats>,
 }
 
@@ -182,14 +195,13 @@ impl Bucket {
 
 struct Aggregator {
     bucket: Bucket,
-    // bucket_time: u64,
 }
 
 impl Aggregator {
     fn new() -> Self {
         Self {
             bucket: Bucket {
-                start: 0,
+                start: (Utc::now() - chrono::Duration::seconds(10)).timestamp_nanos() as u64,
                 duration: time::Duration::from_secs(10).as_nanos() as u64, // This is fixed now, we assume static 10 sec windows
                 data: BTreeMap::new(),
             },
@@ -217,11 +229,6 @@ impl Aggregator {
                 .map(|v| v.to_string_lossy())
                 .unwrap_or_default(),
         };
-        let origin = trace
-            .get("origin")
-            .clone()
-            .map(|v| v.to_string_lossy())
-            .unwrap_or_default();
 
         spans.iter().for_each(|span| {
             let is_top = metric_flag(span, TOP_LEVEL_KEY);
@@ -231,7 +238,7 @@ impl Aggregator {
             {
                 return;
             }
-            self.handle_span(span, weigth, is_top, origin.clone(), payload_aggkey.clone());
+            self.handle_span(span, weigth, is_top, payload_aggkey.clone());
         });
     }
 
@@ -240,15 +247,34 @@ impl Aggregator {
         span: &BTreeMap<String, Value>,
         weight: f64,
         is_top: bool,
-        origin: String,
         payload_aggkey: PayloadAggregationKey,
     ) {
-        let aggkey = AggregationKey::new_aggregation_from_span(span, origin, payload_aggkey);
+        let aggkey = AggregationKey::new_aggregation_from_span(span, payload_aggkey);
         self.bucket.add(span, weight, is_top, aggkey);
     }
 
     fn get_client_stats_payload(&self) -> Vec<dd_proto::ClientStatsPayload> {
-        vec![]
+        let client_stats_buckets = self.bucket.export();
+
+        client_stats_buckets
+            .into_iter()
+            .map(|(payload_aggkey, csb)| {
+                dd_proto::ClientStatsPayload {
+                    env: payload_aggkey.env,
+                    hostname: payload_aggkey.hostname,
+                    container_id: payload_aggkey.container_id,
+                    version: payload_aggkey.version,
+                    stats: vec![csb],
+                    service: "".to_string(),           // already set in stats
+                    agent_aggregation: "".to_string(), // unsure about what is does
+                    sequence: 0,                       // not set by the agent
+                    runtime_id: "".to_string(), // TODO: bring that value from traces if relevant (TBC)
+                    lang: "".to_string(), // TODO: bring that value from traces if relevant (TBC)
+                    tracer_version: "".to_string(), // TODO: bring that value from traces if relevant (TBC)
+                    tags: vec![],                   // empty on purpose
+                }
+            })
+            .collect::<Vec<dd_proto::ClientStatsPayload>>()
     }
 }
 
